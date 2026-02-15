@@ -1,0 +1,207 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String    @id @default(uuid()) @db.Uuid
+  email              String    @unique @db.VarChar(255)
+  passwordHash       String    @map("password_hash") @db.VarChar(255)
+  fullName           String?   @map("full_name") @db.VarChar(255)
+  companyName        String?   @map("company_name") @db.VarChar(255)
+  subscriptionTier   String    @default("free") @map("subscription_tier") @db.VarChar(50)
+  subscriptionStatus String    @default("active") @map("subscription_status") @db.VarChar(50)
+  emailVerified      Boolean   @default(false) @map("email_verified")
+  emailVerifyToken   String?   @map("email_verify_token")
+  passwordResetToken String?   @map("password_reset_token")
+  passwordResetExpires DateTime? @map("password_reset_expires")
+  isActive           Boolean   @default(true) @map("is_active")
+  lastLoginAt        DateTime? @map("last_login_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  folders       Folder[]
+  tables        Table[]
+  jobs          Job[]
+  subscriptions Subscription[]
+  scheduleLogs  ScheduleLog[]
+
+  @@index([email])
+  @@index([subscriptionTier, subscriptionStatus])
+  @@map("users")
+}
+
+model Folder {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  color       String?  @db.VarChar(7)
+  position    Int      @default(0)
+  isArchived  Boolean  @default(false) @map("is_archived")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tables Table[]
+
+  @@index([userId])
+  @@index([userId, isArchived])
+  @@map("folders")
+}
+
+model Table {
+  id                String    @id @default(uuid()) @db.Uuid
+  folderId          String    @map("folder_id") @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  name              String    @db.VarChar(255)
+  description       String?   @db.Text
+  scheduleFrequency String    @map("schedule_frequency") @db.VarChar(20)
+  scheduleTime      String?   @map("schedule_time") @db.VarChar(10)
+  scheduleDayOfWeek Int?      @map("schedule_day_of_week")
+  scheduleDayOfMonth Int?     @map("schedule_day_of_month")
+  isActive          Boolean   @default(true) @map("is_active")
+  lastRunAt         DateTime? @map("last_run_at")
+  nextRunAt         DateTime? @map("next_run_at")
+  totalJobsFetched  Int       @default(0) @map("total_jobs_fetched")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  folder       Folder        @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  searchConfig SearchConfig?
+  jobs         Job[]
+  scheduleLogs ScheduleLog[]
+
+  @@index([folderId])
+  @@index([userId])
+  @@index([nextRunAt])
+  @@map("tables")
+}
+
+model SearchConfig {
+  id                   String   @id @default(uuid()) @db.Uuid
+  tableId              String   @unique @map("table_id") @db.Uuid
+  jobKeywords          String   @map("job_keywords") @db.Text
+  jobLocation          String   @map("job_location") @db.VarChar(255)
+  aiFilterInstructions String?  @map("ai_filter_instructions") @db.Text
+  includeLinkedin      Boolean  @default(true) @map("include_linkedin")
+  includeIndeed        Boolean  @default(true) @map("include_indeed")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  table Table @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@index([tableId])
+  @@map("search_configs")
+}
+
+model Job {
+  id                String    @id @default(uuid()) @db.Uuid
+  tableId           String    @map("table_id") @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  jobTitle          String    @map("job_title") @db.VarChar(500)
+  jobUrl            String    @map("job_url") @db.Text
+  jobDescription    String?   @map("job_description") @db.Text
+  companyName       String?   @map("company_name") @db.VarChar(255)
+  companyLinkedinUrl String?  @map("company_linkedin_url") @db.Text
+  location          String?   @db.VarChar(255)
+  salaryRange       String?   @map("salary_range") @db.VarChar(255)
+  jobType           String?   @map("job_type") @db.VarChar(100)
+  source            String    @db.VarChar(50)
+  externalId        String?   @map("external_id") @db.VarChar(255)
+  postedDate        DateTime? @map("posted_date") @db.Date
+  scrapedAt         DateTime  @default(now()) @map("scraped_at")
+  aiFilterPassed    Boolean?  @map("ai_filter_passed")
+  aiFilterReason    String?   @map("ai_filter_reason") @db.Text
+  status            String    @default("new") @db.VarChar(50)
+  notes             String?   @db.Text
+  markedAt          DateTime? @map("marked_at")
+  jobHash           String?   @map("job_hash") @db.VarChar(64)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  table Table @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tableId, jobHash])
+  @@index([tableId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([status])
+  @@index([source])
+  @@index([tableId, createdAt])
+  @@map("jobs")
+}
+
+model ScheduleLog {
+  id                 String    @id @default(uuid()) @db.Uuid
+  tableId            String    @map("table_id") @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  startedAt          DateTime  @map("started_at")
+  completedAt        DateTime? @map("completed_at")
+  status             String    @db.VarChar(50)
+  jobsFetchedLinkedin Int      @default(0) @map("jobs_fetched_linkedin")
+  jobsFetchedIndeed  Int       @default(0) @map("jobs_fetched_indeed")
+  jobsAdded          Int       @default(0) @map("jobs_added")
+  jobsFilteredOut    Int       @default(0) @map("jobs_filtered_out")
+  jobsDuplicates     Int       @default(0) @map("jobs_duplicates")
+  errorMessage       String?   @map("error_message") @db.Text
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  table Table @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tableId])
+  @@index([startedAt])
+  @@map("schedule_logs")
+}
+
+model Subscription {
+  id                   String    @id @default(uuid()) @db.Uuid
+  userId               String    @map("user_id") @db.Uuid
+  planName             String    @map("plan_name") @db.VarChar(100)
+  planPrice            Decimal?  @map("plan_price") @db.Decimal(10, 2)
+  billingCycle         String?   @map("billing_cycle") @db.VarChar(20)
+  stripeCustomerId     String?   @map("stripe_customer_id") @db.VarChar(255)
+  stripeSubscriptionId String?   @map("stripe_subscription_id") @db.VarChar(255)
+  status               String    @default("active") @db.VarChar(50)
+  currentPeriodStart   DateTime? @map("current_period_start") @db.Date
+  currentPeriodEnd     DateTime? @map("current_period_end") @db.Date
+  maxFolders           Int?      @map("max_folders")
+  maxTables            Int?      @map("max_tables")
+  maxJobsPerMonth      Int?      @map("max_jobs_per_month")
+  foldersUsed          Int       @default(0) @map("folders_used")
+  tablesUsed           Int       @default(0) @map("tables_used")
+  jobsFetchedThisMonth Int       @default(0) @map("jobs_fetched_this_month")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([stripeCustomerId])
+  @@map("subscriptions")
+}
+
+model ApiRequestLog {
+  id              String   @id @default(uuid()) @db.Uuid
+  tableId         String?  @map("table_id") @db.Uuid
+  userId          String?  @map("user_id") @db.Uuid
+  service         String   @db.VarChar(50)
+  requestType     String?  @map("request_type") @db.VarChar(100)
+  requestPayload  Json?    @map("request_payload")
+  responsePayload Json?    @map("response_payload")
+  statusCode      Int?     @map("status_code")
+  executionTimeMs Int?     @map("execution_time_ms")
+  costUsd         Decimal? @map("cost_usd") @db.Decimal(10, 4)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([service])
+  @@map("api_requests_log")
+}
